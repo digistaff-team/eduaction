@@ -21,6 +21,7 @@ const App: React.FC = () => {
   const [view, setView] = useState<'landing' | 'catalog' | 'profile' | 'course'>('landing');
   const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
   const [showAdminPanel, setShowAdminPanel] = useState(false);
+  const [showUserMenu, setShowUserMenu] = useState(false);
   const [courses, setCourses] = useState<Course[]>(COURSES);
 
   // Отслеживание состояния аутентификации
@@ -99,6 +100,19 @@ const App: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyPress);
   }, []);
 
+  // Закрытие меню при клике вне его
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (showUserMenu && !target.closest('.user-menu-wrapper')) {
+        setShowUserMenu(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showUserMenu]);
+
   // Показываем загрузку пока проверяется аутентификация
   if (authLoading) {
     return (
@@ -140,17 +154,57 @@ const App: React.FC = () => {
           </span>
         </div>
 
-        <div className="nav-actions">
-          <div 
-            className="user-avatar" 
-            onClick={() => setShowAdminPanel(true)} 
-            title="Админ-панель"
-          >
-            {user?.displayName?.substring(0, 2).toUpperCase() || 'АД'}
+                <div className="nav-actions">
+          <div className="user-menu-wrapper">
+            <div 
+              className="user-avatar" 
+              onClick={() => setShowUserMenu(!showUserMenu)}
+              title={user?.displayName || 'Пользователь'}
+            >
+              {user?.displayName?.substring(0, 2).toUpperCase() || 'АД'}
+            </div>
+            
+            {showUserMenu && (
+              <div className="user-dropdown">
+                <div className="user-dropdown-header">
+                  <strong>{user?.displayName || 'Пользователь'}</strong>
+                  <span>{user?.email}</span>
+                </div>
+                
+                <button 
+                  onClick={() => { 
+                    setShowAdminPanel(true); 
+                    setShowUserMenu(false);
+                  }}
+                  className="dropdown-item"
+                >
+                  <Icons.Settings />
+                  <span>Админ-панель</span>
+                </button>
+                
+                <button 
+                  onClick={() => {
+                    handleViewProfile();
+                    setShowUserMenu(false);
+                  }}
+                  className="dropdown-item"
+                >
+                  <Icons.User />
+                  <span>Личный кабинет</span>
+                </button>
+                
+                <div className="dropdown-divider"></div>
+                
+                <button 
+                  onClick={handleLogout}
+                  className="dropdown-item danger"
+                >
+                  <Icons.X />
+                  <span>Выйти</span>
+                </button>
+              </div>
+            )}
           </div>
-          <button className="logout-btn" onClick={handleLogout} title="Выйти">
-            <Icons.X />
-          </button>
         </div>
       </nav>
 
