@@ -28,23 +28,26 @@ export const CourseGenerator: React.FC = () => {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  const generateModuleWithProTalk = async (moduleNumber: number): Promise<Module> => {
-    if (!BOT_TOKEN || !BOT_ID || !API_URL) {
-      throw new Error('Pro-Talk credentials не настроены в .env.local');
-    }
+const generateModuleWithProTalk = async (
+  moduleNumber: number,
+  courseData: { title: string; category: string; difficulty: string; moduleCount: number }
+): Promise<Module> => {
+  if (!BOT_TOKEN || !BOT_ID || !API_URL) {
+    throw new Error('Pro-Talk credentials не настроены в .env');
+  }
 
-    const difficultyNames = {
-      beginner: 'Начальный',
-      intermediate: 'Средний',
-      advanced: 'Продвинутый'
-    };
+  const difficultyNames = {
+    beginner: 'Начальный',
+    intermediate: 'Средний',
+    advanced: 'Продвинутый'
+  };
 
-    const prompt = `
+  const prompt = `
 Твоя роль - эксперт-методолог по созданию учебных материалов для онлайн-курсов.
-Создай образовательный модуль для курса "${params.title}" (категория: ${params.category}).
+Создай образовательный модуль для курса "${courseData.title}" (категория: ${courseData.category}).
 Используй обоснованный подход и проверенные временем лучшие практики.
-Уровень сложности: ${params.difficulty}.
-Это модуль номер ${moduleNumber} из ${params.moduleCount}.
+Уровень сложности: ${difficultyNames[courseData.difficulty as keyof typeof difficultyNames]}.
+Это модуль номер ${moduleNumber} из ${courseData.moduleCount}.
 
 Верни JSON в следующем формате (БЕЗ markdown, ТОЛЬКО JSON):
 {
@@ -68,98 +71,88 @@ export const CourseGenerator: React.FC = () => {
         "options": ["Вариант 1", "Вариант 2", "Вариант 3", "Вариант 4"],
         "correctAnswer": 2
       },
-{
+      {
         "text": "Вопрос 4",
         "options": ["Вариант 1", "Вариант 2", "Вариант 3", "Вариант 4"],
-        "correctAnswer": 4
+        "correctAnswer": 3
       },
-{
+      {
         "text": "Вопрос 5",
         "options": ["Вариант 1", "Вариант 2", "Вариант 3", "Вариант 4"],
-        "correctAnswer": 3
+        "correctAnswer": 0
       }
-
     ]
   }
 }
 `;
 
-    const chatId = `course_gen_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  try {
+    console.log('🤖 Отправка запроса к Pro-Talk API...');
+    
+    // ✅ ПРАВИЛЬНЫЙ ЗАПРОС по документации
+    const response = await fetch(`${API_URL}/ask/${BOT_TOKEN}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        bot_id: parseInt(BOT_ID),
+        chat_id: `course-gen-${Date.now()}-${moduleNumber}`,
+        message: prompt
+      })
+    });
 
-    try {
-      console.log(`🤖 Генерирую модуль ${moduleNumber} через Pro-Talk API...`);
+    console.log('📡 Response status:', response.status);
 
-      const response = await fetch(`${API_URL}/ask/${BOT_TOKEN}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          bot_id: parseInt(BOT_ID),
-          chat_id: chatId,
-          message: prompt
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-      const text = data.done || data.response;
-
-      if (!text) {
-        throw new Error('Пустой ответ от API');
-      }
-
-      console.log(`✅ Модуль ${moduleNumber} сгенерирован`);
-
-      // Очистка от markdown
-      let jsonText = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-
-      // Попытка парсинга JSON
-      const moduleData = JSON.parse(jsonText);
-
-      return {
-        id: `m${moduleNumber}`,
-        title: moduleData.title,
-        content: moduleData.content,
-        completed: false,
-        quiz: {
-          id: `q${moduleNumber}`,
-          title: moduleData.quiz.title,
-          questions: moduleData.quiz.questions.map((q: any, idx: number) => ({
-            id: `q${moduleNumber}_${idx + 1}`,
-            text: q.text,
-            options: q.options,
-            correctAnswer: q.correctAnswer
-          }))
-        }
-      };
-    } catch (error: any) {
-      console.error(`❌ Ошибка генерации модуля ${moduleNumber}:`, error);
-
-      // Fallback: возвращаем заглушку
-      return {
-        id: `m${moduleNumber}`,
-        title: `Модуль ${moduleNumber}: ${formData.title}`,
-        content: `Это модуль ${moduleNumber} курса "${formData.title}". Содержание будет добавлено позже. Ошибка генерации: ${error.message}`,
-        completed: false,
-        quiz: {
-          id: `q${moduleNumber}`,
-          title: `Квиз модуля ${moduleNumber}`,
-          questions: [
-            {
-              id: `q${moduleNumber}_1`,
-              text: 'Тестовый вопрос 1',
-              options: ['Вариант A', 'Вариант B', 'Вариант C', 'Вариант D'],
-              correctAnswer: 0
-            }
-          ]
-        }
-      };
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('❌ Pro-Talk API error:', errorText);
+      throw new Error(`Pro-Talk API error: ${response.status} - ${errorText}`);
     }
-  };
+
+    const data = await response.json();
+    console.log('📥 Response from Pro-Talk:', data);
+    
+    // ✅ ПРАВИЛЬНОЕ поле ответа - "done"
+    const responseText = data.done || '';
+    
+    if (!responseText) {
+      throw new Error('Пустой ответ от Pro-Talk API');
+    }
+    
+    // Извлекаем JSON из ответа (убираем markdown если есть)
+    const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      console.error('❌ Не удалось найти JSON в ответе:', responseText);
+      throw new Error('Не удалось извлечь JSON из ответа Pro-Talk');
+    }
+    
+    const moduleData = JSON.parse(jsonMatch[0]);
+    console.log('✅ Модуль создан:', moduleData.title);
+    
+    // Формируем модуль в нужном формате
+    return {
+      id: `module-${Date.now()}-${moduleNumber}`,
+      title: moduleData.title,
+      duration: '15 мин',
+      content: moduleData.content,
+      completedDate: null,
+      quiz: {
+        title: moduleData.quiz?.title || `Квиз: ${moduleData.title}`,
+        questions: moduleData.quiz?.questions?.map((q: any, idx: number) => ({
+          id: `q${idx + 1}`,
+          text: q.text,
+          options: q.options,
+          correctAnswer: q.correctAnswer
+        })) || []
+      }
+    };
+  } catch (error) {
+    console.error(`❌ Ошибка генерации модуля ${moduleNumber}:`, error);
+    throw error;
+  }
+};
+
 
   const handleGenerate = async () => {
     if (!formData.title || !formData.instructor || !formData.category) {
@@ -182,7 +175,12 @@ export const CourseGenerator: React.FC = () => {
       for (let i = 0; i < formData.moduleCount; i++) {
         setProgress(Math.round(((i + 1) / formData.moduleCount) * 100));
 
-        const module = await generateModuleWithProTalk(i + 1);
+        const module = await generateModuleWithProTalk(i + 1, {
+  title: formData.title,
+  category: formData.category,
+  difficulty: formData.difficulty,
+  moduleCount: formData.moduleCount
+});
         modules.push(module);
 
         // Задержка между запросами 10 сек, чтобы не превысить rate limit
