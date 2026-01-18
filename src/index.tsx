@@ -25,105 +25,149 @@ const App: React.FC = () => {
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [courses, setCourses] = useState<Course[]>(COURSES);
   const [progressLoading, setProgressLoading] = useState(false);
+  const [userProgress, setUserProgress] = useState<any>(null);
 
-  // Функции загрузки данных (определяем ДО useEffect)
+  // ← ДОБАВЬТЕ ЛОГ ЗДЕСЬ
+  console.log('🎯 App State:', { 
+    view, 
+    authLoading, 
+    progressLoading, 
+    coursesCount: courses.length,
+    hasUser: !!user 
+  });
+
+  // Загрузка курсов из Firebase (созданных через AdminPanel)
   const loadCoursesFromFirebase = async () => {
     try {
+      console.log('📥 Loading courses from Firebase...');
       const firebaseCourses = await courseService.getAllCourses();
       if (firebaseCourses.length > 0) {
+        console.log('✅ Firebase courses loaded:', firebaseCourses.length);
         setCourses([...COURSES, ...firebaseCourses]);
       }
     } catch (error) {
-      console.error('Error loading Firebase courses:', error);
+      console.error('❌ Error loading Firebase courses:', error);
     }
   };
 
+  // Загрузка прогресса пользователя
   const loadUserProgress = async (userId: string) => {
+    console.log('🔄 Loading progress for user:', userId);
     setProgressLoading(true);
     try {
-      // Загружаем прогресс из Firebase
+      // Загружаем прогресс пользователя
       const progressData = await userProgressService.getUserProgress(userId);
+      console.log('📊 Progress data from Firebase:', progressData);
+      setUserProgress(progressData);
       
-      // Загружаем курсы из Firebase (если есть)
+      // Загружаем курсы из Firebase
       const firebaseCourses = await courseService.getAllCourses();
-      const allCourses = firebaseCourses.length > 0 
-        ? [...COURSES, ...firebaseCourses] 
-        : COURSES;
+      console.log('📚 Firebase courses:', firebaseCourses);
       
-      // Восстанавливаем прогресс
+      // Объединяем статические курсы и курсы из Firebase
+      const allCourses = [...COURSES, ...firebaseCourses];
+      console.log('📖 All courses (static + firebase):', allCourses.map(c => ({id: c.id, title: c.title})));
+      
+      // Восстанавливаем прогресс для всех курсов
       const coursesWithProgress = userProgressService.restoreCoursesFromProgress(
         allCourses,
         progressData
       );
+      console.log('✅ Final courses with restored progress:', coursesWithProgress);
       
       setCourses(coursesWithProgress);
-    } catch (error) {
-      console.error('Error loading user progress:', error);
-      // В случае ошибки загружаем курсы без прогресса
-      loadCoursesFromFirebase();
-    } finally {
-      setProgressLoading(false);
-    }
-  };
+    console.log('✅ Final courses with restored progress:', coursesWithProgress);
+  } catch (error) {
+    console.error('❌ Error loading user progress:', error);
+    await loadCoursesFromFirebase();
+  } finally {
+    console.log('✅ Setting progressLoading = false'); // ← ДОБАВЬТЕ
+    setProgressLoading(false);
+  }
+};
 
-  // Отслеживание состояния аутентификации
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
-      setAuthLoading(false);
-      
-      // Если пользователь вошел, загружаем его прогресс
-      if (currentUser) {
-        loadUserProgress(currentUser.uid);
-        setView('profile');
-      } else {
-        setView('landing');
-        setCourses(COURSES);
-      }
+// Отслеживание состояния аутентификации
+useEffect(() => {
+  console.log('🔧 Setting up auth listener');
+  let isFirstLoad = true;
+  
+  const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+    console.log('🔐 Auth state changed:', { 
+      hasUser: !!currentUser,
+      userId: currentUser?.uid,
+      isFirstLoad,
+      currentView: view
     });
+    
+    setUser(currentUser);
+    setAuthLoading(false);
+    
+    if (currentUser) {
+      console.log('✅ User logged in, setting view to profile');
+      setView('profile');
+      
+      if (isFirstLoad) {
+        console.log('📥 First load - loading user progress');
+        isFirstLoad = false;
+        loadUserProgress(currentUser.uid);
+      } else {
+        console.log('🔄 Not first load - skipping progress load');
+      }
+    } else {
+      console.log('❌ User logged out, resetting to landing');
+      setView('landing');
+      setCourses(COURSES);
+      setUserProgress(null);
+    }
+  });
 
-    return () => unsubscribe();
-  }, []);
+  return () => {
+    console.log('🧹 Cleaning up auth listener');
+    unsubscribe();
+  };
+}, []);
 
-  // Real-time синхронизация прогресса
+
+  // Real-time синхронизация прогресса с автоматической загрузкой Firebase курсов
   useEffect(() => {
     if (!user) return;
 
     const unsubscribe = userProgressService.subscribeToProgress(
       user.uid,
-      (progressData) => {
+      async (progressData) => {
         if (progressData) {
-          setCourses((prevCourses) => 
-            userProgressService.restoreCoursesFromProgress(prevCourses, progressData)
-          );
+          console.log('🔄 Real-time progress update:', progressData);
+          setUserProgress(progressData);
+          
+          // Загружаем курсы из Firebase перед восстановлением прогресса
+          try {
+            const firebaseCourses = await courseService.getAllCourses();
+            const allCourses = firebaseCourses.length > 0 
+              ? [...COURSES, ...firebaseCourses]
+              : COURSES;
+            
+            console.log('📚 All courses for restore (static + firebase):', allCourses.length);
+            
+            // Восстанавливаем прогресс используя ВСЕ курсы
+            const coursesWithProgress = userProgressService.restoreCoursesFromProgress(
+              allCourses,
+              progressData
+            );
+            
+            setCourses(coursesWithProgress);
+          } catch (error) {
+            console.error('❌ Error loading courses in real-time update:', error);
+            // Fallback: используем текущие курсы
+            setCourses((prevCourses) => 
+              userProgressService.restoreCoursesFromProgress(prevCourses, progressData)
+            );
+          }
         }
       }
     );
 
     return () => unsubscribe();
   }, [user]);
-
-  // Автоматическое сохранение прогресса при изменении курсов
-  useEffect(() => {
-    if (!user || authLoading || progressLoading) return;
-
-    const saveCourses = async () => {
-      for (const course of courses) {
-        if (course.progress > 0) {
-          try {
-            await userProgressService.saveCourseProgress(user.uid, course);
-          } catch (error) {
-            console.error(`Error saving progress for course ${course.id}:`, error);
-          }
-        }
-      }
-    };
-
-    // Debounce: сохраняем через 2 секунды после изменения
-    const timeoutId = setTimeout(saveCourses, 2000);
-
-    return () => clearTimeout(timeoutId);
-  }, [courses, user, authLoading, progressLoading]);
 
   // Секретная комбинация для админ-панели (Ctrl+Shift+A)
   useEffect(() => {
@@ -163,8 +207,10 @@ const App: React.FC = () => {
     await authService.logout();
     setView('landing');
     setCourses(COURSES);
+    setUserProgress(null);
   };
 
+  // Обработчики навигации
   const handleSelectCourse = (course: Course) => {
     setSelectedCourse(course);
     setView('course');
@@ -183,26 +229,41 @@ const App: React.FC = () => {
     setView('catalog');
   };
 
-  // Показываем загрузку пока проверяется аутентификация или загружается прогресс
-  if (authLoading || progressLoading) {
-    return (
-      <div className="app-container loading">
-        <div className="loading-spinner">
-          <Icons.Brain />
-          <p>{progressLoading ? 'Загрузка прогресса...' : 'Загрузка...'}</p>
-        </div>
+ // Показываем загрузку
+if (authLoading || progressLoading) {
+  return (
+    <div className="app-container loading">
+      <div className="loading-spinner">
+        <Icons.Brain />
+        <p>{progressLoading ? 'Загрузка прогресса...' : 'Загрузка...'}</p>
       </div>
-    );
-  }
+    </div>
+  );
+}
 
-  // Если пользователь не авторизован - показываем лендинг
-  if (!user && view === 'landing') {
-    return <Landing onLogin={handleLogin} onRegister={handleRegister} />;
-  }
+// Лендинг для неавторизованных пользователей
+if (!user && view === 'landing') {
+  return <Landing onLogin={handleLogin} onRegister={handleRegister} />;
+}
 
-  // Авторизованное приложение
+// ← ДОБАВЬТЕ DEBUG БЛОК ЗДЕСЬ
+if (user && view === 'landing') {
+  console.warn('⚠️ User logged in but view is still "landing"!');
   return (
     <div className="app-container">
+      <div style={{ padding: '2rem', textAlign: 'center' }}>
+        <p>⚠️ Debug: User logged in but view = {view}</p>
+        <p>User: {user.uid}</p>
+        <p>Courses: {courses.length}</p>
+        <button onClick={() => setView('profile')}>Перейти к профилю</button>
+      </div>
+    </div>
+  );
+}
+
+// Авторизованное приложение
+return (
+  <div className="app-container">
       <nav className="top-nav">
         <div className="logo" onClick={handleViewProfile}>
           <Icons.Brain />
@@ -231,7 +292,7 @@ const App: React.FC = () => {
               onClick={() => setShowUserMenu(!showUserMenu)}
               title={user?.displayName || 'Пользователь'}
             >
-              {user?.displayName?.substring(0, 2).toUpperCase() || 'АД'}
+              {user?.displayName?.substring(0, 2).toUpperCase() || 'FI'}
             </div>
             
             {showUserMenu && (
@@ -292,18 +353,71 @@ const App: React.FC = () => {
       )}
       
       {view === 'course' && selectedCourse && (
-        <CoursePlayer course={selectedCourse} onBack={handleBack} />
+        <CoursePlayer 
+          course={selectedCourse} 
+          onBack={handleBack}
+          userProgress={
+            userProgress?.courses && Array.isArray(userProgress.courses)
+              ? userProgress.courses.find((c: any) => c.courseId === selectedCourse.id)
+              : undefined
+          }
+          onProgressUpdate={async (courseProgress) => {
+            console.log('💾 Saving course progress:', courseProgress);
+            
+            // Безопасная работа с courses - проверяем что это массив
+            const existingCourses = Array.isArray(userProgress?.courses) 
+              ? userProgress.courses 
+              : [];
+            
+            // Обновляем прогресс в существующем массиве
+            const updatedCourses = existingCourses.map((c: any) => 
+              c.courseId === selectedCourse.id 
+                ? { courseId: selectedCourse.id, ...courseProgress } 
+                : c
+            );
+            
+            // Если курса нет в массиве - добавляем
+            if (!updatedCourses.find((c: any) => c.courseId === selectedCourse.id)) {
+              updatedCourses.push({ 
+                courseId: selectedCourse.id, 
+                ...courseProgress 
+              });
+            }
+            
+            // Создаём обновлённый объект прогресса
+            const newUserProgress = {
+              ...userProgress,
+              courses: updatedCourses
+            };
+            
+            // Обновляем state
+            setUserProgress(newUserProgress);
+            
+            // Сохраняем в Firebase
+            if (user) {
+              try {
+                await userProgressService.updateUserProgress(user.uid, newUserProgress);
+                console.log('✅ Progress saved to Firebase successfully');
+              } catch (error) {
+                console.error('❌ Error saving to Firebase:', error);
+              }
+            }
+          }}
+        />
       )}
 
       {showAdminPanel && (
-        <AdminPanel onClose={() => {
-          setShowAdminPanel(false);
-          loadCoursesFromFirebase();
-        }} />
+        <AdminPanel 
+          onClose={() => {
+            setShowAdminPanel(false);
+            loadCoursesFromFirebase();
+          }} 
+        />
       )}
     </div>
   );
 };
 
+// Рендер приложения
 const root = createRoot(document.getElementById('root')!);
 root.render(<App />);

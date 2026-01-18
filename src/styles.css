@@ -2993,4 +2993,37 @@ body {
   display: none;
 }
 
+/* Кнопка завершения модуля */
+.complete-card {
+  background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+  border-left: 4px solid #10b981;
+}
+
+.complete-btn {
+  background: #10b981;
+  color: white;
+}
+
+.complete-btn:hover {
+  background: #059669;
+  transform: translateY(-2px);
+}
+
+{view === 'profile' && (
+  <div style={{ 
+    minHeight: '500px', 
+    background: 'yellow', 
+    padding: '2rem' 
+  }}>
+    <p>DEBUG: View is profile</p>
+    <p>Courses count: {courses.length}</p>
+    <UserProfile 
+      courses={courses} 
+      userName={user?.displayName || 'Пользователь'}
+      onSelectCourse={handleSelectCourse}
+      onBack={handleBack}
+    />
+  </div>
+)}
+
 

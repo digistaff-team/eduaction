@@ -1,199 +1,157 @@
-import { doc, setDoc, getDoc, updateDoc, collection, onSnapshot, serverTimestamp, Timestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../config/firebase';
-import { Course, Module, QuizResult } from '../types';
+import { Course } from '../types';
 
-export interface UserProgressData {
-  courses: {
-    [courseId: string]: {
-      progress: number;
-      startedDate: string;
-      lastAccessDate: string;
-      completedDate: string | null;
-      averageScore: number;
-      modules: {
-        [moduleId: string]: {
-          completed: boolean;
-          completedDate: string | null;
-          quizResults: QuizResult[];
-        };
-      };
-    };
-  };
-}
+const USER_PROGRESS_COLLECTION = 'userProgress';
 
 export const userProgressService = {
-  // Создать профиль пользователя при регистрации
-  async createUserProfile(userId: string, displayName: string, email: string) {
+  // Получение прогресса пользователя
+  async getUserProgress(userId: string): Promise<any> {
     try {
-      const userRef = doc(db, 'users', userId);
-      await setDoc(userRef, {
-        displayName,
-        email,
-        createdAt: serverTimestamp(),
-        lastLogin: serverTimestamp(),
-      });
-    } catch (error) {
-      console.error('Error creating user profile:', error);
-      throw error;
-    }
-  },
-
-  // Обновить время последнего входа
-  async updateLastLogin(userId: string) {
-    try {
-      const userRef = doc(db, 'users', userId);
-      await updateDoc(userRef, {
-        lastLogin: serverTimestamp(),
-      });
-    } catch (error) {
-      console.error('Error updating last login:', error);
-    }
-  },
-
-  // Получить весь прогресс пользователя
-  async getUserProgress(userId: string): Promise<UserProgressData | null> {
-    try {
-      const progressRef = doc(db, 'userProgress', userId);
-      const progressSnap = await getDoc(progressRef);
-
-      if (progressSnap.exists()) {
-        return progressSnap.data() as UserProgressData;
-      }
-      return null;
-    } catch (error) {
-      console.error('Error getting user progress:', error);
-      return null;
-    }
-  },
-
-  // Сохранить/обновить прогресс курса
-  async saveCourseProgress(userId: string, course: Course) {
-    try {
-      const progressRef = doc(db, 'userProgress', userId);
-      const courseData = {
-        progress: course.progress,
-        startedDate: course.startedDate || new Date().toLocaleDateString('ru-RU'),
-        lastAccessDate: new Date().toLocaleDateString('ru-RU'),
-        completedDate: course.progress === 100 ? new Date().toLocaleDateString('ru-RU') : null,
-        averageScore: course.averageScore || 0,
-        modules: {} as any,
-      };
-
-      // Преобразуем модули в объект
-      course.modules.forEach((module) => {
-        courseData.modules[module.id] = {
-          completed: module.completed,
-          completedDate: module.completedDate || null,
-          quizResults: module.quizResults || [],
-        };
-      });
-
-      // Обновляем или создаем документ
-      const progressSnap = await getDoc(progressRef);
+      const userProgressRef = doc(db, USER_PROGRESS_COLLECTION, userId);
+      const docSnap = await getDoc(userProgressRef);
       
-      if (progressSnap.exists()) {
-        await updateDoc(progressRef, {
-          [`courses.${course.id}`]: courseData,
-        });
+      if (docSnap.exists()) {
+        return docSnap.data();
       } else {
-        await setDoc(progressRef, {
-          courses: {
-            [course.id]: courseData,
-          },
-        });
+        console.log('No progress found for user:', userId);
+        return { courses: [] };
       }
+    } catch (error) {
+      console.error('Error fetching user progress:', error);
+      return { courses: [] };
+    }
+  },
+
+  // Сохранение прогресса курса
+  async saveCourseProgress(userId: string, course: Course): Promise<void> {
+    try {
+      const userProgressRef = doc(db, USER_PROGRESS_COLLECTION, userId);
+      const docSnap = await getDoc(userProgressRef);
+      
+      let progressData: any = { courses: [] };
+      
+      if (docSnap.exists()) {
+        progressData = docSnap.data();
+      }
+      
+      // Инициализируем courses если его нет
+      if (!Array.isArray(progressData.courses)) {
+        progressData.courses = [];
+      }
+      
+      // Ищем курс в прогрессе
+      const courseIndex = progressData.courses.findIndex(
+        (c: any) => c.courseId === course.id
+      );
+      
+      const courseProgress = {
+        courseId: course.id,
+        progress: course.progress,
+        completedDate: course.completedDate || null,
+        startedDate: course.startedDate || new Date().toISOString(),
+        lastAccessDate: new Date().toISOString(),
+        modules: course.modules.map(m => ({
+          moduleId: m.id,
+          completedDate: m.completedDate || null,
+          averageScore: m.averageScore || 0
+        }))
+      };
+      
+      if (courseIndex >= 0) {
+        // Обновляем существующий курс
+        progressData.courses[courseIndex] = courseProgress;
+      } else {
+        // Добавляем новый курс
+        progressData.courses.push(courseProgress);
+      }
+      
+      // Сохраняем в Firestore
+      await setDoc(userProgressRef, progressData, { merge: true });
     } catch (error) {
       console.error('Error saving course progress:', error);
       throw error;
     }
   },
 
-  // Обновить прогресс модуля
-  async updateModuleProgress(
-    userId: string,
-    courseId: string,
-    moduleId: string,
-    completed: boolean,
-    quizResults?: QuizResult[]
-  ) {
+  // Обновление прогресса пользователя (НОВАЯ ФУНКЦИЯ)
+  async updateUserProgress(userId: string, progressData: any): Promise<void> {
     try {
-      const progressRef = doc(db, 'userProgress', userId);
-      const updateData: any = {
-        [`courses.${courseId}.modules.${moduleId}.completed`]: completed,
-        [`courses.${courseId}.lastAccessDate`]: new Date().toLocaleDateString('ru-RU'),
-      };
-
-      if (completed) {
-        updateData[`courses.${courseId}.modules.${moduleId}.completedDate`] = 
-          new Date().toLocaleDateString('ru-RU');
-      }
-
-      if (quizResults) {
-        updateData[`courses.${courseId}.modules.${moduleId}.quizResults`] = quizResults;
-      }
-
-      await updateDoc(progressRef, updateData);
+      console.log('💾 Updating user progress in Firebase:', userId);
+      const userProgressRef = doc(db, USER_PROGRESS_COLLECTION, userId);
+      
+      // Обновляем или создаём документ
+      await setDoc(userProgressRef, {
+        ...progressData,
+        lastUpdated: new Date().toISOString()
+      }, { merge: true });
+      
+      console.log('✅ User progress updated successfully');
     } catch (error) {
-      console.error('Error updating module progress:', error);
+      console.error('❌ Error updating user progress:', error);
       throw error;
     }
   },
 
-  // Подписаться на изменения прогресса (real-time)
-  subscribeToProgress(userId: string, callback: (progress: UserProgressData | null) => void) {
-    const progressRef = doc(db, 'userProgress', userId);
+  // Подписка на изменения прогресса в реальном времени
+  subscribeToProgress(userId: string, callback: (data: any) => void): () => void {
+    const userProgressRef = doc(db, USER_PROGRESS_COLLECTION, userId);
     
-    return onSnapshot(progressRef, (snapshot) => {
-      if (snapshot.exists()) {
-        callback(snapshot.data() as UserProgressData);
-      } else {
-        callback(null);
+    return onSnapshot(userProgressRef, (docSnap) => {
+      if (docSnap.exists()) {
+        callback(docSnap.data());
       }
-    }, (error) => {
-      console.error('Error in progress subscription:', error);
-      callback(null);
     });
   },
 
-  // Восстановить курсы из прогресса Firebase
-  restoreCoursesFromProgress(courses: Course[], progressData: UserProgressData | null): Course[] {
-    if (!progressData || !progressData.courses) {
+  // Восстановление курсов с прогрессом
+  restoreCoursesFromProgress(courses: Course[], progressData: any): Course[] {
+    console.log('📊 Restoring progress from Firebase:', progressData);
+    console.log('📚 Courses to restore:', courses);
+    
+    if (!progressData || !Array.isArray(progressData.courses)) {
       return courses;
     }
-
-    return courses.map((course) => {
-      const savedProgress = progressData.courses[course.id];
+    
+    return courses.map(course => {
+      const savedProgress = progressData.courses.find(
+        (cp: any) => cp.courseId === course.id
+      );
+      
+      console.log(`🔍 Checking course ID: "${course.id}", Found in Firebase:`, !!savedProgress);
       
       if (!savedProgress) {
+        console.log(`ℹ️ No saved progress for course: ${course.title}`);
         return course;
       }
-
-      // Восстанавливаем модули
-      const restoredModules = course.modules.map((module) => {
-        const savedModule = savedProgress.modules[module.id];
+      
+      console.log(`✅ Restoring progress for: ${course.title}`, savedProgress);
+      
+      // Восстанавливаем прогресс модулей
+      const restoredModules = course.modules.map(module => {
+        const savedModule = savedProgress.modules?.find(
+          (sm: any) => sm.moduleId === module.id
+        );
         
-        if (!savedModule) {
-          return module;
+        if (savedModule) {
+          return {
+            ...module,
+            completedDate: savedModule.completedDate,
+            averageScore: savedModule.averageScore || 0
+          };
         }
-
-        return {
-          ...module,
-          completed: savedModule.completed,
-          completedDate: savedModule.completedDate,
-          quizResults: savedModule.quizResults || [],
-        };
+        
+        return module;
       });
-
-      // Восстанавливаем курс
+      
       return {
         ...course,
-        progress: savedProgress.progress,
-        startedDate: savedProgress.startedDate,
-        lastAccessDate: savedProgress.lastAccessDate,
-        completedDate: savedProgress.completedDate,
-        averageScore: savedProgress.averageScore,
         modules: restoredModules,
+        progress: savedProgress.progress || 0,
+        completedDate: savedProgress.completedDate,
+        startedDate: savedProgress.startedDate,
+        lastAccessDate: savedProgress.lastAccessDate
       };
     });
-  },
+  }
 };
