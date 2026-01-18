@@ -13,6 +13,7 @@ import { CoursePlayer } from './components/CoursePlayer';
 import { AdminPanel } from './components/AdminPanel';
 import { courseService } from './services/courseService';
 import { authService } from './services/authService';
+import { userProgressService } from './services/userProgressService';
 import './styles.css';
 
 const App: React.FC = () => {
@@ -23,25 +24,9 @@ const App: React.FC = () => {
   const [showAdminPanel, setShowAdminPanel] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [courses, setCourses] = useState<Course[]>(COURSES);
+  const [progressLoading, setProgressLoading] = useState(false);
 
-  // Отслеживание состояния аутентификации
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
-      setAuthLoading(false);
-      
-      // Если пользователь вошел, загружаем его курсы
-      if (currentUser) {
-        loadCoursesFromFirebase();
-        setView('profile'); // Перенаправляем в личный кабинет
-      } else {
-        setView('landing');
-      }
-    });
-
-    return () => unsubscribe();
-  }, []);
-
+  // Функции загрузки данных (определяем ДО useEffect)
   const loadCoursesFromFirebase = async () => {
     try {
       const firebaseCourses = await courseService.getAllCourses();
@@ -53,40 +38,92 @@ const App: React.FC = () => {
     }
   };
 
-  // Обработчики аутентификации
-  const handleLogin = async (email: string, password: string) => {
-    await authService.login(email, password);
-    // onAuthStateChanged автоматически обновит состояние
+  const loadUserProgress = async (userId: string) => {
+    setProgressLoading(true);
+    try {
+      // Загружаем прогресс из Firebase
+      const progressData = await userProgressService.getUserProgress(userId);
+      
+      // Загружаем курсы из Firebase (если есть)
+      const firebaseCourses = await courseService.getAllCourses();
+      const allCourses = firebaseCourses.length > 0 
+        ? [...COURSES, ...firebaseCourses] 
+        : COURSES;
+      
+      // Восстанавливаем прогресс
+      const coursesWithProgress = userProgressService.restoreCoursesFromProgress(
+        allCourses,
+        progressData
+      );
+      
+      setCourses(coursesWithProgress);
+    } catch (error) {
+      console.error('Error loading user progress:', error);
+      // В случае ошибки загружаем курсы без прогресса
+      loadCoursesFromFirebase();
+    } finally {
+      setProgressLoading(false);
+    }
   };
 
-  const handleRegister = async (email: string, password: string, name: string) => {
-    await authService.register(email, password, name);
-    // onAuthStateChanged автоматически обновит состояние
-  };
+  // Отслеживание состояния аутентификации
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+      setAuthLoading(false);
+      
+      // Если пользователь вошел, загружаем его прогресс
+      if (currentUser) {
+        loadUserProgress(currentUser.uid);
+        setView('profile');
+      } else {
+        setView('landing');
+        setCourses(COURSES);
+      }
+    });
 
-  const handleLogout = async () => {
-    await authService.logout();
-    setView('landing');
-    setCourses(COURSES);
-  };
+    return () => unsubscribe();
+  }, []);
 
-  const handleSelectCourse = (course: Course) => {
-    setSelectedCourse(course);
-    setView('course');
-  };
+  // Real-time синхронизация прогресса
+  useEffect(() => {
+    if (!user) return;
 
-  const handleBack = () => {
-    setSelectedCourse(null);
-    setView('profile');
-  };
+    const unsubscribe = userProgressService.subscribeToProgress(
+      user.uid,
+      (progressData) => {
+        if (progressData) {
+          setCourses((prevCourses) => 
+            userProgressService.restoreCoursesFromProgress(prevCourses, progressData)
+          );
+        }
+      }
+    );
 
-  const handleViewProfile = () => {
-    setView('profile');
-  };
+    return () => unsubscribe();
+  }, [user]);
 
-  const handleViewCatalog = () => {
-    setView('catalog');
-  };
+  // Автоматическое сохранение прогресса при изменении курсов
+  useEffect(() => {
+    if (!user || authLoading || progressLoading) return;
+
+    const saveCourses = async () => {
+      for (const course of courses) {
+        if (course.progress > 0) {
+          try {
+            await userProgressService.saveCourseProgress(user.uid, course);
+          } catch (error) {
+            console.error(`Error saving progress for course ${course.id}:`, error);
+          }
+        }
+      }
+    };
+
+    // Debounce: сохраняем через 2 секунды после изменения
+    const timeoutId = setTimeout(saveCourses, 2000);
+
+    return () => clearTimeout(timeoutId);
+  }, [courses, user, authLoading, progressLoading]);
 
   // Секретная комбинация для админ-панели (Ctrl+Shift+A)
   useEffect(() => {
@@ -113,13 +150,46 @@ const App: React.FC = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showUserMenu]);
 
-  // Показываем загрузку пока проверяется аутентификация
-  if (authLoading) {
+  // Обработчики аутентификации
+  const handleLogin = async (email: string, password: string) => {
+    await authService.login(email, password);
+  };
+
+  const handleRegister = async (email: string, password: string, name: string) => {
+    await authService.register(email, password, name);
+  };
+
+  const handleLogout = async () => {
+    await authService.logout();
+    setView('landing');
+    setCourses(COURSES);
+  };
+
+  const handleSelectCourse = (course: Course) => {
+    setSelectedCourse(course);
+    setView('course');
+  };
+
+  const handleBack = () => {
+    setSelectedCourse(null);
+    setView('profile');
+  };
+
+  const handleViewProfile = () => {
+    setView('profile');
+  };
+
+  const handleViewCatalog = () => {
+    setView('catalog');
+  };
+
+  // Показываем загрузку пока проверяется аутентификация или загружается прогресс
+  if (authLoading || progressLoading) {
     return (
       <div className="app-container loading">
         <div className="loading-spinner">
           <Icons.Brain />
-          <p>Загрузка...</p>
+          <p>{progressLoading ? 'Загрузка прогресса...' : 'Загрузка...'}</p>
         </div>
       </div>
     );
@@ -154,7 +224,7 @@ const App: React.FC = () => {
           </span>
         </div>
 
-                <div className="nav-actions">
+        <div className="nav-actions">
           <div className="user-menu-wrapper">
             <div 
               className="user-avatar" 
