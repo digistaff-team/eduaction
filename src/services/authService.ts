@@ -18,13 +18,6 @@ export const authService = {
         await updateProfile(userCredential.user, {
           displayName: name
         });
-
-        // Создать профиль в Firestore
-        await userProgressService.createUserProfile(
-          userCredential.user.uid,
-          name,
-          email
-        );
       }
       
       return userCredential.user;
@@ -36,18 +29,12 @@ export const authService = {
     async login(email: string, password: string) {
     try {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      
-      // Обновить последний вход
-      if (userCredential.user) {
-        await userProgressService.updateLastLogin(userCredential.user.uid);
-      }
-      
+           
       return userCredential.user;
     } catch (error: any) {
       throw new Error(this.getErrorMessage(error.code));
     }
   },
-
 
   async logout(): Promise<void> {
     await signOut(auth);

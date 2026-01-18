@@ -235,7 +235,6 @@ export const CoursePlayer: React.FC<CoursePlayerProps> = ({
                 onComplete={handleQuizComplete}
                 onContinue={handleContinueLearning}
                 onClose={() => setQuizMode(false)}
-                isLastModule={activeModuleIndex === course.modules.length - 1}
               />
             ) : (
               <div className="text-content-block">

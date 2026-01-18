@@ -48,13 +48,13 @@ export const userProgressService = {
       const courseProgress = {
         courseId: course.id,
         progress: course.progress,
-        completedDate: course.completedDate || null,
+        completedDate: null,
         startedDate: course.startedDate || new Date().toISOString(),
         lastAccessDate: new Date().toISOString(),
         modules: course.modules.map(m => ({
           moduleId: m.id,
           completedDate: m.completedDate || null,
-          averageScore: m.averageScore || 0
+          averageScore: 0
         }))
       };
       

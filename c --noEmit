@@ -1,0 +1,63 @@
+[1mdiff --git a/src/services/authService.ts b/src/services/authService.ts[m
+[1mindex f438dad..c26814d 100644[m
+[1m--- a/src/services/authService.ts[m
+[1m+++ b/src/services/authService.ts[m
+[36m@@ -1,3 +1,4 @@[m
+[32m+[m[32mimport { userProgressService } from './userProgressService';[m
+ import { [m
+   createUserWithEmailAndPassword, [m
+   signInWithEmailAndPassword,[m
+[36m@@ -8,17 +9,46 @@[m [mimport {[m
+ import { auth } from '../config/firebase';[m
+ [m
+ export const authService = {[m
+[31m-  async register(email: string, password: string, name: string): Promise<User> {[m
+[31m-    const userCredential = await createUserWithEmailAndPassword(auth, email, password);[m
+[31m-    await updateProfile(userCredential.user, { displayName: name });[m
+[31m-    return userCredential.user;[m
+[32m+[m[32m    async register(email: string, password: string, name: string) {[m
+[32m+[m[32m    try {[m
+[32m+[m[32m      const userCredential = await createUserWithEmailAndPassword(auth, email, password);[m
+[32m+[m[41m      [m
+[32m+[m[32m      // Обновить displayName[m
+[32m+[m[32m      if (userCredential.user) {[m
+[32m+[m[32m        await updateProfile(userCredential.user, {[m
+[32m+[m[32m          displayName: name[m
+[32m+[m[32m        });[m
+[32m+[m
+[32m+[m[32m        // Создать профиль в Firestore[m
+[32m+[m[32m        await userProgressService.createUserProfile([m
+[32m+[m[32m          userCredential.user.uid,[m
+[32m+[m[32m          name,[m
+[32m+[m[32m          email[m
+[32m+[m[32m        );[m
+[32m+[m[32m      }[m
+[32m+[m[41m      [m
+[32m+[m[32m      return userCredential.user;[m
+[32m+[m[32m    } catch (error: any) {[m
+[32m+[m[32m      throw new Error(this.getErrorMessage(error.code));[m
+[32m+[m[32m    }[m
+   },[m
+ [m
+[31m-  async login(email: string, password: string): Promise<User> {[m
+[31m-    const userCredential = await signInWithEmailAndPassword(auth, email, password);[m
+[31m-    return userCredential.user;[m
+[32m+[m[32m    async login(email: string, password: string) {[m
+[32m+[m[32m    try {[m
+[32m+[m[32m      const userCredential = await signInWithEmailAndPassword(auth, email, password);[m
+[32m+[m[41m      [m
+[32m+[m[32m      // Обновить последний вход[m
+[32m+[m[32m      if (userCredential.user) {[m
+[32m+[m[32m        await userProgressService.updateLastLogin(userCredential.user.uid);[m
+[32m+[m[32m      }[m
+[32m+[m[41m      [m
+[32m+[m[32m      return userCredential.user;[m
+[32m+[m[32m    } catch (error: any) {[m
+[32m+[m[32m      throw new Error(this.getErrorMessage(error.code));[m
+[32m+[m[32m    }[m
+   },[m
+ [m
+[32m+[m
+   async logout(): Promise<void> {[m
+     await signOut(auth);[m
+   },[m
