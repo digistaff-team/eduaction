@@ -5,16 +5,21 @@ interface MobileHeaderProps {
   userName: string;
   userEmail?: string;
   onLogout: () => void;
-  onOpenAdmin: () => void;
+  onNavigate: (view: 'profile' | 'catalog' | 'statistics') => void;
 }
 
 export const MobileHeader: React.FC<MobileHeaderProps> = ({
   userName,
   userEmail,
   onLogout,
-  onOpenAdmin,
+  onNavigate,
 }) => {
   const [showMenu, setShowMenu] = useState(false);
+
+  const handleNavigate = (view: 'profile' | 'catalog' | 'statistics') => {
+    onNavigate(view);
+    setShowMenu(false);
+  };
 
   return (
     <>
@@ -53,15 +58,30 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
 
             <div className="mobile-menu-items">
               <button
-                onClick={() => {
-                  onOpenAdmin();
-                  setShowMenu(false);
-                }}
+                onClick={() => handleNavigate('profile')}
                 className="mobile-menu-item"
               >
-                <Icons.Settings />
-                <span>Админ-панель</span>
+                <Icons.User />
+                <span>Личный кабинет</span>
               </button>
+
+              <button
+                onClick={() => handleNavigate('catalog')}
+                className="mobile-menu-item"
+              >
+                <Icons.Grid />
+                <span>Каталог курсов</span>
+              </button>
+
+              <button
+                onClick={() => handleNavigate('statistics')}
+                className="mobile-menu-item"
+              >
+                <Icons.BarChart />
+                <span>Статистика</span>
+              </button>
+
+              <div className="mobile-menu-divider"></div>
 
               <button
                 onClick={() => {

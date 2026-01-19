@@ -8,6 +8,7 @@ import { LEARNING_TOPICS } from './data/topics';
 import { Icons } from './components/Icons';
 import { Landing } from './components/Landing';
 import { CatalogView } from './components/CatalogView';
+import { Statistics } from './components/Statistics';
 import { UserProfile } from './components/UserProfile';
 import { CoursePlayer } from './components/CoursePlayer';
 import { AdminPanel } from './components/AdminPanel';
@@ -26,7 +27,7 @@ const App: React.FC = () => {
   const { isMobile } = useDeviceDetection();
   const [user, setUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
-  const [view, setView] = useState<'landing' | 'catalog' | 'profile' | 'course'>('landing');
+  const [view, setView] = useState<'landing' | 'catalog' | 'profile' | 'course' | 'statistics'>('landing');
   const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
   const [showAdminPanel, setShowAdminPanel] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
@@ -236,6 +237,10 @@ useEffect(() => {
     setView('catalog');
   };
 
+  const handleViewStatistics = () => {
+    setView('statistics');
+  };
+
  // Показываем загрузку
 if (authLoading || progressLoading) {
   return (
@@ -351,9 +356,18 @@ return (
           userName={user?.displayName || 'Пользователь'}
           userEmail={user?.email || ''}
           onLogout={handleLogout}
-          onOpenAdmin={() => setShowAdminPanel(true)}
+          onNavigate={(newView) => {
+            if (newView === 'catalog') {
+              handleViewCatalog();
+            } else if (newView === 'statistics') {
+              handleViewStatistics();
+            } else {
+              handleViewProfile();
+            }
+          }}
         />
       )}
+
 
 
       {view === 'profile' && (
@@ -371,6 +385,15 @@ return (
           onBack={handleViewProfile}
         />
       )}
+
+      {view === 'statistics' && (
+  <Statistics
+    courses={courses}
+    userName={user?.displayName || 'Пользователь'}
+    onBack={handleViewProfile}
+  />
+)}
+
 
       
       {view === 'course' && selectedCourse && (
@@ -436,14 +459,15 @@ return (
       )}
 
 
-      {showAdminPanel && (
-        <AdminPanel 
-          onClose={() => {
-            setShowAdminPanel(false);
-            loadCoursesFromFirebase();
-          }} 
-        />
-      )}
+{!isMobile && showAdminPanel && (
+  <AdminPanel
+    onClose={() => {
+      setShowAdminPanel(false);
+      loadCoursesFromFirebase();
+    }}
+  />
+)}
+
     </div>
   );
 };

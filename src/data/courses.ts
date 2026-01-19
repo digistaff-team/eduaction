@@ -89,13 +89,14 @@ export const COURSES: Course[] = [
       },
     ]
   },
+
   {
     id: '3',
     title: "Agile Methodologies for Teams",
     instructor: "Jessica Wu",
     duration: "6h 00m",
     category: "Productivity",
-    progress: 0,
+    progress: 10,
     image: "https://images.unsplash.com/photo-1531403009284-440f080d1e12?auto=format&fit=crop&q=80&w=400",
     modules: [
       { id: 'a1', title: "Scrum Framework Basics", completed: false, content: "Introduction to Scrum." },
