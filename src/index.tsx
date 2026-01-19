@@ -15,8 +15,15 @@ import { courseService } from './services/courseService';
 import { authService } from './services/authService';
 import { userProgressService } from './services/userProgressService';
 import './styles.css';
+import './mobile-styles.css';
+import { useDeviceDetection } from './hooks/useDeviceDetection';
+import { MobileHeader } from './components/mobile/MobileHeader';
+import { MobileNavigation } from './components/mobile/MobileNavigation';
+
+
 
 const App: React.FC = () => {
+  const { isMobile } = useDeviceDetection();
   const [user, setUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [view, setView] = useState<'landing' | 'catalog' | 'profile' | 'course'>('landing');
@@ -263,77 +270,91 @@ if (user && view === 'landing') {
 
 // Авторизованное приложение
 return (
-  <div className="app-container">
-      <nav className="top-nav">
-        <div className="logo" onClick={handleViewProfile}>
-          <Icons.Brain />
-          <span>EduAction</span>
-        </div>
-        
-        <div className="nav-actions">
-          <div className="user-menu-wrapper">
-            <div 
-              className="user-avatar" 
-              onClick={() => setShowUserMenu(!showUserMenu)}
-              title={user?.displayName || 'Пользователь'}
-            >
-              {user?.displayName?.substring(0, 2).toUpperCase() || 'FI'}
-            </div>
-            
-            {showUserMenu && (
-              <div className="user-dropdown">
-                <div className="user-dropdown-header">
-                  <strong>{user?.displayName || 'Пользователь'}</strong>
-                  <span>{user?.email}</span>
-                </div>
-                
-                <button 
-                  onClick={() => { 
-                    setShowAdminPanel(true); 
-                    setShowUserMenu(false);
-                  }}
-                  className="dropdown-item"
-                >
-                  <Icons.Settings />
-                  <span>Админ-панель</span>
-                </button>
-
-                <button 
-                  onClick={() => {
-                    handleViewCatalog();
-                    setShowUserMenu(false);
-                  }}
-                  className="dropdown-item"
-                >
-                  <Icons.Grid />
-                  <span>Каталог</span>
-                </button>
-                
-                <button 
-                  onClick={() => {
-                    handleViewProfile();
-                    setShowUserMenu(false);
-                  }}
-                  className="dropdown-item"
-                >
-                  <Icons.User />
-                  <span>Личный кабинет</span>
-                </button>
-                
-                <div className="dropdown-divider"></div>
-                
-                <button 
-                  onClick={handleLogout}
-                  className="dropdown-item danger"
-                >
-                  <Icons.X />
-                  <span>Выйти</span>
-                </button>
-              </div>
-            )}
+  <div className={`app-container ${isMobile ? 'mobile' : ''}`}>
+      {/* Десктопная навигация */}
+      {!isMobile && (
+        <nav className="top-nav">
+          <div className="logo" onClick={handleViewProfile}>
+            <Icons.Brain />
+            <span>EduAction</span>
           </div>
-        </div>
-      </nav>
+
+          <div className="nav-actions">
+            <div className="user-menu-wrapper">
+              <div
+                className="user-avatar"
+                onClick={() => setShowUserMenu(!showUserMenu)}
+                title={user?.displayName || 'Пользователь'}
+              >
+                {user?.displayName?.substring(0, 2).toUpperCase() || 'FI'}
+              </div>
+
+              {showUserMenu && (
+                <div className="user-dropdown">
+                  <div className="user-dropdown-header">
+                    <strong>{user?.displayName || 'Пользователь'}</strong>
+                    <span>{user?.email}</span>
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      setShowAdminPanel(true);
+                      setShowUserMenu(false);
+                    }}
+                    className="dropdown-item"
+                  >
+                    <Icons.Settings />
+                    <span>Админ-панель</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      handleViewCatalog();
+                      setShowUserMenu(false);
+                    }}
+                    className="dropdown-item"
+                  >
+                    <Icons.Grid />
+                    <span>Каталог</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      handleViewProfile();
+                      setShowUserMenu(false);
+                    }}
+                    className="dropdown-item"
+                  >
+                    <Icons.User />
+                    <span>Личный кабинет</span>
+                  </button>
+
+                  <div className="dropdown-divider"></div>
+
+                  <button
+                    onClick={handleLogout}
+                    className="dropdown-item danger"
+                  >
+                    <Icons.X />
+                    <span>Выйти</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </nav>
+      )}
+
+      {/* Мобильный хедер */}
+      {isMobile && (
+        <MobileHeader
+          userName={user?.displayName || 'Пользователь'}
+          userEmail={user?.email || ''}
+          onLogout={handleLogout}
+          onOpenAdmin={() => setShowAdminPanel(true)}
+        />
+      )}
+
 
       {view === 'profile' && (
         <UserProfile 
@@ -343,14 +364,18 @@ return (
           onBack={handleBack}
         />
       )}
-      
+
       {view === 'catalog' && (
-        <CatalogView topics={LEARNING_TOPICS} onBack={handleViewProfile} />
+        <CatalogView
+          topics={LEARNING_TOPICS}
+          onBack={handleViewProfile}
+        />
       )}
+
       
       {view === 'course' && selectedCourse && (
-        <CoursePlayer 
-          course={selectedCourse} 
+        <CoursePlayer
+          course={selectedCourse}
           onBack={handleBack}
           userProgress={
             userProgress?.courses && Array.isArray(userProgress.courses)
@@ -360,36 +385,30 @@ return (
           onProgressUpdate={async (courseProgress) => {
             console.log('💾 Saving course progress:', courseProgress);
             
-            // Безопасная работа с courses - проверяем что это массив
-            const existingCourses = Array.isArray(userProgress?.courses) 
-              ? userProgress.courses 
+            const existingCourses = Array.isArray(userProgress?.courses)
+              ? userProgress.courses
               : [];
             
-            // Обновляем прогресс в существующем массиве
-            const updatedCourses = existingCourses.map((c: any) => 
-              c.courseId === selectedCourse.id 
-                ? { courseId: selectedCourse.id, ...courseProgress } 
+            const updatedCourses = existingCourses.map((c: any) =>
+              c.courseId === selectedCourse.id
+                ? { courseId: selectedCourse.id, ...courseProgress }
                 : c
             );
             
-            // Если курса нет в массиве - добавляем
             if (!updatedCourses.find((c: any) => c.courseId === selectedCourse.id)) {
-              updatedCourses.push({ 
-                courseId: selectedCourse.id, 
-                ...courseProgress 
+              updatedCourses.push({
+                courseId: selectedCourse.id,
+                ...courseProgress
               });
             }
             
-            // Создаём обновлённый объект прогресса
             const newUserProgress = {
               ...userProgress,
               courses: updatedCourses
             };
             
-            // Обновляем state
             setUserProgress(newUserProgress);
             
-            // Сохраняем в Firebase
             if (user) {
               try {
                 await userProgressService.updateUserProgress(user.uid, newUserProgress);
@@ -401,6 +420,21 @@ return (
           }}
         />
       )}
+
+      {/* Мобильная нижняя навигация - ПРАВИЛЬНОЕ МЕСТО */}
+      {isMobile && view !== 'course' && (
+        <MobileNavigation
+          activeView={view === 'catalog' ? 'catalog' : 'profile'}
+          onNavigate={(newView) => {
+            if (newView === 'catalog') {
+              handleViewCatalog();
+            } else {
+              handleViewProfile();
+            }
+          }}
+        />
+      )}
+
 
       {showAdminPanel && (
         <AdminPanel 
