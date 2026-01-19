@@ -95,12 +95,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose }) => {
         <div className="admin-header">
           <h2>⚙️ Панель администратора</h2>
           <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-            <span style={{ fontSize: '0.9rem', color: '#6b7280' }}>
-              {auth.currentUser?.email}
-            </span>
-            <button onClick={handleLogout} className="logout-btn">
-              Выйти
-            </button>
             <button onClick={onClose} className="icon-btn">
               <Icons.X />
             </button>

@@ -270,21 +270,6 @@ return (
           <span>EduAction</span>
         </div>
         
-        <div className="nav-links">
-          <span 
-            className={view === 'catalog' ? 'active' : ''}
-            onClick={handleViewCatalog}
-          >
-            <Icons.Grid /> Каталог
-          </span>
-          <span 
-            className={view === 'profile' ? 'active' : ''}
-            onClick={handleViewProfile}
-          >
-            <Icons.User /> Личный кабинет
-          </span>
-        </div>
-
         <div className="nav-actions">
           <div className="user-menu-wrapper">
             <div 
@@ -311,6 +296,17 @@ return (
                 >
                   <Icons.Settings />
                   <span>Админ-панель</span>
+                </button>
+
+                <button 
+                  onClick={() => {
+                    handleViewCatalog();
+                    setShowUserMenu(false);
+                  }}
+                  className="dropdown-item"
+                >
+                  <Icons.Grid />
+                  <span>Каталог</span>
                 </button>
                 
                 <button 
