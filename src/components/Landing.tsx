@@ -50,10 +50,9 @@ export const Landing: React.FC<LandingProps> = ({ onLogin, onRegister }) => {
               <Icons.Brain />
               <span>EduAction</span>
             </div>
-            <h1>Платформа корпоративного онлайн-обучения</h1>
+            <h1>Платформа онлайн-обучения</h1>
             <p className="hero-subtitle">
-              Развивайте навыки ваших сотрудников с помощью персонализированных курсов,
-              AI-помощника и системы отслеживания прогресса
+              Развивайте свои деловые навыки с помощью AI-ассистента
             </p>
 
             <div className="features-grid">
@@ -61,8 +60,8 @@ export const Landing: React.FC<LandingProps> = ({ onLogin, onRegister }) => {
                 <div className="feature-icon">
                   <Icons.Brain />
                 </div>
-                <h3>AI-Тьютор</h3>
-                <p>Персональный помощник для каждого модуля</p>
+                <h3>AI-Тьютор всегда в чате</h3>
+                <p>Персональный помощник по материалу каждого модуля</p>
               </div>
 
               <div className="feature-item">
@@ -70,23 +69,23 @@ export const Landing: React.FC<LandingProps> = ({ onLogin, onRegister }) => {
                   <Icons.TrendingUp />
                 </div>
                 <h3>Отслеживание прогресса</h3>
-                <p>Детальная аналитика и статистика обучения</p>
+                <p>Детальная статистика по процессу и результатам вашего обучения</p>
               </div>
 
               <div className="feature-item">
                 <div className="feature-icon">
                   <Icons.Award />
                 </div>
-                <h3>Сертификаты</h3>
-                <p>Подтверждение навыков после завершения</p>
+                <h3>Сертификат выпускника</h3>
+                <p>Подтверждение навыков после успешного завершения курса</p>
               </div>
 
               <div className="feature-item">
                 <div className="feature-icon">
                   <Icons.Grid />
                 </div>
-                <h3>Каталог курсов</h3>
-                <p>Широкий выбор тем для развития</p>
+                <h3>Каталог курсов по темам</h3>
+                <p>Широкий выбор направлений для развития ваших деловых навыков</p>
               </div>
             </div>
           </div>
